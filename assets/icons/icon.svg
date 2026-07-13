@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#D8A16D;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#5AB0B1;stop-opacity:1" />
+        </linearGradient>
+        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+            <feOffset dx="0" dy="2" result="offsetblur"/>
+            <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3"/>
+            </feComponentTransfer>
+            <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+    
+    <!-- Background -->
+    <rect width="512" height="512" fill="url(#bgGrad)"/>
+    
+    <!-- Decorative circles -->
+    <circle cx="256" cy="256" r="200" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+    <circle cx="256" cy="256" r="160" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+    
+    <!-- Rings (wedding symbol) -->
+    <g filter="url(#shadow)">
+        <circle cx="220" cy="256" r="60" fill="none" stroke="#ffffff" stroke-width="8"/>
+        <circle cx="292" cy="256" r="60" fill="none" stroke="#ffffff" stroke-width="8"/>
+    </g>
+    
+    <!-- Initials C & R -->
+    <text x="256" y="380" font-family="Georgia, serif" font-size="48" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="8">
+        C &amp; R
+    </text>
+    
+    <!-- Heart decoration -->
+    <path d="M 256 160 C 240 140, 210 140, 210 170 C 210 200, 256 230, 256 230 C 256 230, 302 200, 302 170 C 302 140, 272 140, 256 160 Z" 
+          fill="#ffffff" opacity="0.9"/>
+</svg>
