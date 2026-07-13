@@ -1,304 +1,292 @@
-/**
- * ============================================================
- * APP.JS - MAIN APPLICATION CONTROLLER
- * ============================================================
- * 
- * Fungsi:
- * - Initialize all modules
- * - Load data from API
- * - Orchestrate rendering
- * - Handle global events
- * - Toast notifications
- * - Error handling
- * 
- * Author: Senior Full Stack Developer
- * Version: 1.0.0
- * ============================================================
- */
+// ============================================================
+// PWA INSTALL PROMPT
+// ============================================================
+let deferredPrompt = null;
 
-const App = (() => {
-    // ============================================================
-    // STATE
-    // ============================================================
-    let appData = null;
-    let isInitialized = false;
-
-    // ============================================================
-    // INITIALIZATION
-    // ============================================================
-    async function init() {
-        if (isInitialized) return;
-
-        console.log('🚀 [App] Initializing...');
-
-        try {
-            // 1. Initialize Music module
-            Music.init();
-
-            // 2. Load all data from API
-            await loadData();
-
-            // 3. Render all components
-            await Component.renderAll(appData);
-
-            // 4. Initialize animations
-            Animation.initCoverAnimation();
-
-            // 5. Initialize form handlers
-            Form.initRSVP();
-            Form.initUcapan();
-
-            // 6. Bind global events
-            bindGlobalEvents();
-
-            // 7. Hide loading screen
-            Animation.hideLoadingScreen();
-
-            // 8. Register service worker (PWA)
-            registerServiceWorker();
-
-            isInitialized = true;
-            console.log('✅ [App] Initialization complete');
-
-        } catch (error) {
-            console.error('❌ [App] Initialization failed:', error);
-            handleInitError(error);
-        }
-    }
-
-    // ============================================================
-    // DATA LOADING
-    // ============================================================
-    async function loadData() {
-        console.log('📥 [App] Loading data...');
-
-        try {
-            // Try batch load first
-            const response = await API.data.initAll(1, window.GUEST_CODE);
-            
-            if (response.status && response.data) {
-                appData = response.data;
-                console.log('✅ [App] Data loaded successfully');
-            } else {
-                throw new Error('Invalid response format');
-            }
-        } catch (error) {
-            console.warn('⚠️ [App] Batch load failed, trying individual loads...');
-            
-            // Fallback: load individually
-            appData = await loadFallbackData();
-        }
-    }
-
-    async function loadFallbackData() {
-        const data = {};
-
-        try {
-            const [settings, sections, couple, events, gallery, stories, streaming, gifts, dresscode, ucapan] = await Promise.all([
-                API.data.getSettings().catch(() => ({ data: {} })),
-                API.data.getSections().catch(() => ({ data: [] })),
-                API.data.getCouple().catch(() => ({ data: [] })),
-                API.data.getEvents().catch(() => ({ data: [] })),
-                API.data.getGallery().catch(() => ({ data: [] })),
-                API.data.getLoveStory().catch(() => ({ data: [] })),
-                API.data.getStreaming().catch(() => ({ data: [] })),
-                API.data.getGift().catch(() => ({ data: [] })),
-                API.data.getDresscode().catch(() => ({ data: [] })),
-                API.data.getUcapan().catch(() => ({ data: [] }))
-            ]);
-
-            data.settings = settings.data || {};
-            data.sections = sections.data || [];
-            data.couple = couple.data || [];
-            data.events = events.data || [];
-            data.gallery = gallery.data || [];
-            data.stories = stories.data || [];
-            data.streaming = streaming.data || [];
-            data.gifts = gifts.data || [];
-            data.dresscode = dresscode.data || [];
-            data.greetings = ucapan.data || [];
-            data.quote = { data: {} };
-
-            // Try to get quote from content
-            try {
-                const content = await API.data.getContent('HOME');
-                if (content.status && content.data) {
-                    const quoteContent = content.data.find(c => c.SECTION === 'QUOTE');
-                    if (quoteContent) {
-                        let extraData = {};
-                        try {
-                            extraData = JSON.parse(quoteContent.EXTRA_DATA || '{}');
-                        } catch (e) {}
-                        
-                        data.quote = {
-                            data: {
-                                arabic: extraData.arabic || '',
-                                text: quoteContent.DESCRIPTION || '',
-                                source: quoteContent.TITLE || ''
-                            }
-                        };
-                    }
-                }
-            } catch (e) {
-                console.warn('⚠️ [App] Failed to load quote');
-            }
-
-            // Try to get guest by code
-            if (window.GUEST_CODE && window.GUEST_CODE !== 'pratinjau') {
-                try {
-                    const guestResponse = await API.data.getGuestByCode(window.GUEST_CODE);
-                    if (guestResponse.status && guestResponse.data) {
-                        data.guest = guestResponse.data;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ [App] Guest not found');
-                }
-            }
-
-            console.log('✅ [App] Fallback data loaded');
-            return data;
-
-        } catch (error) {
-            console.error('❌ [App] Fallback load failed:', error);
-            throw error;
-        }
-    }
-
-    // ============================================================
-    // GLOBAL EVENT BINDING
-    // ============================================================
-    function bindGlobalEvents() {
-        // Open invitation button
-        const openBtn = document.getElementById('openInvitationBtn');
-        if (openBtn) {
-            openBtn.addEventListener('click', () => {
-                Animation.openCover();
-            });
-        }
-
-        // Smooth scroll for anchor links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                const href = this.getAttribute('href');
-                if (href === '#' || href === '#main') return;
-                
-                e.preventDefault();
-                Animation.smoothScrollTo(href);
-            });
-        });
-
-        // Handle offline/online events
-        window.addEventListener('online', () => {
-            showToast('Koneksi internet kembali', 'success');
-        });
-
-        window.addEventListener('offline', () => {
-            showToast('Koneksi internet terputus', 'warning');
-        });
-
-        console.log('✅ [App] Global events bound');
-    }
-
-    // ============================================================
-    // TOAST NOTIFICATIONS
-    // ============================================================
-    let toastTimeout = null;
-
-    function showToast(message, type = 'info') {
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-
-        if (!toast || !toastMessage) return;
-
-        // Clear previous timeout
-        if (toastTimeout) {
-            clearTimeout(toastTimeout);
-        }
-
-        // Set message
-        toastMessage.textContent = message;
-
-        // Set color based on type
-        const colors = {
-            success: '#10b981',
-            error: '#ef4444',
-            warning: '#f59e0b',
-            info: '#3b82f6'
-        };
-
-        toast.style.borderLeft = `4px solid ${colors[type] || colors.info}`;
-
-        // Show toast
-        toast.classList.add('visible');
-
-        // Hide after 3 seconds
-        toastTimeout = setTimeout(() => {
-            toast.classList.remove('visible');
-        }, 3000);
-    }
-
-    // ============================================================
-    // ERROR HANDLING
-    // ============================================================
-    function handleInitError(error) {
-        Animation.hideLoadingScreen();
+function setupPWAInstall() {
+    // Listen for beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('📱 [PWA] Install prompt available');
         
-        showToast('Gagal memuat data. Silakan refresh halaman.', 'error');
+        // Prevent Chrome 67+ from automatically showing the prompt
+        e.preventDefault();
+        
+        // Stash the event so it can be triggered later
+        deferredPrompt = e;
+        
+        // Show custom install button
+        showInstallButton();
+    });
+    
+    // Event fired when the app is successfully installed
+    window.addEventListener('appinstalled', () => {
+        console.log('✅ [PWA] App installed successfully');
+        
+        // Hide install button
+        hideInstallButton();
+        
+        // Clear deferred prompt
+        deferredPrompt = null;
+        
+        // Show success toast
+        showToast('Aplikasi berhasil di-install!', 'success');
+    });
+    
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        console.log('✅ [PWA] Running in standalone mode');
+    }
+}
 
-        // Show error message on cover
-        const coverContent = document.getElementById('coverContent');
-        if (coverContent) {
-            const errorMsg = document.createElement('div');
-            errorMsg.className = 'text-red-500 text-sm text-center mt-4';
-            errorMsg.textContent = '⚠️ Gagal memuat data. Silakan refresh halaman.';
-            coverContent.appendChild(errorMsg);
+function showInstallButton() {
+    // Create install button if not exists
+    let installBtn = document.getElementById('pwaInstallBtn');
+    
+    if (!installBtn) {
+        installBtn = document.createElement('div');
+        installBtn.id = 'pwaInstallBtn';
+        installBtn.className = 'pwa-install-prompt';
+        installBtn.innerHTML = `
+            <div style="display:flex;align-items:center;gap:1rem">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D8A16D" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <div>
+                    <div style="font-weight:600;margin-bottom:0.25rem">Install Aplikasi</div>
+                    <div style="font-size:0.75rem;opacity:0.7">Akses cepat dari home screen</div>
+                </div>
+                <button id="pwaInstallAction" style="background:#D8A16D;color:#000;padding:0.5rem 1rem;border:none;border-radius:0;cursor:pointer;font-weight:600;font-size:0.875rem">
+                    Install
+                </button>
+                <button id="pwaInstallClose" style="background:transparent;color:#fff;border:none;cursor:pointer;padding:0.25rem">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(installBtn);
+        
+        // Bind events
+        document.getElementById('pwaInstallAction').addEventListener('click', handleInstall);
+        document.getElementById('pwaInstallClose').addEventListener('click', hideInstallButton);
+    }
+    
+    installBtn.classList.add('visible');
+}
+
+function hideInstallButton() {
+    const installBtn = document.getElementById('pwaInstallBtn');
+    if (installBtn) {
+        installBtn.classList.remove('visible');
+    }
+}
+
+async function handleInstall() {
+    if (!deferredPrompt) {
+        showToast('Install tidak tersedia saat ini', 'warning');
+        return;
+    }
+    
+    // Show the install prompt
+    deferredPrompt.prompt();
+    
+    // Wait for the user to respond
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`[PWA] User response: ${outcome}`);
+    
+    // Clear deferred prompt
+    deferredPrompt = null;
+    
+    // Hide install button
+    hideInstallButton();
+}
+
+// ============================================================
+// PWA UPDATE NOTIFICATION
+// ============================================================
+function checkForUpdates() {
+    if (!('serviceWorker' in navigator)) return;
+    
+    navigator.serviceWorker.addEventListener('updatefound', () => {
+        const newWorker = navigator.serviceWorker.installing;
+        
+        newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New version available
+                showUpdateNotification();
+            }
+        });
+    });
+}
+
+function showUpdateNotification() {
+    const notification = document.createElement('div');
+    notification.id = 'pwaUpdateNotification';
+    notification.className = 'pwa-install-prompt visible';
+    notification.style.background = '#D8A16D';
+    notification.style.color = '#000';
+    notification.innerHTML = `
+        <div style="display:flex;align-items:center;gap:1rem">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <div>
+                <div style="font-weight:600;margin-bottom:0.25rem">Update Tersedia</div>
+                <div style="font-size:0.75rem;opacity:0.7">Versi baru siap digunakan</div>
+            </div>
+            <button id="pwaUpdateAction" style="background:#000;color:#fff;padding:0.5rem 1rem;border:none;border-radius:0;cursor:pointer;font-weight:600;font-size:0.875rem">
+                Update
+            </button>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    document.getElementById('pwaUpdateAction').addEventListener('click', () => {
+        // Tell service worker to skip waiting
+        navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg.waiting) {
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+        });
+        
+        // Reload page
+        window.location.reload();
+    });
+}
+
+// ============================================================
+// ONLINE/OFFLINE STATUS
+// ============================================================
+function setupOnlineOfflineDetection() {
+    const updateOnlineStatus = () => {
+        const isOnline = navigator.onLine;
+        console.log(`[PWA] Status: ${isOnline ? 'Online' : 'Offline'}`);
+        
+        // Update UI
+        if (isOnline) {
+            document.body.classList.remove('offline');
+            showToast('Koneksi internet kembali', 'success');
+        } else {
+            document.body.classList.add('offline');
+            showToast('Koneksi internet terputus', 'warning');
         }
-    }
-
-    // ============================================================
-    // SERVICE WORKER REGISTRATION
-    // ============================================================
-    function registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(registration => {
-                    console.log('✅ [App] Service Worker registered:', registration.scope);
-                })
-                .catch(error => {
-                    console.warn('⚠️ [App] Service Worker registration failed:', error);
-                });
-        }
-    }
-
-    // ============================================================
-    // UTILITY FUNCTIONS
-    // ============================================================
-    function getData() {
-        return appData;
-    }
-
-    function refreshData() {
-        API.cache.clear();
-        return loadData().then(() => Component.renderAll(appData));
-    }
-
-    // ============================================================
-    // PUBLIC API
-    // ============================================================
-    return {
-        init,
-        showToast,
-        getData,
-        refreshData
     };
-})();
+    
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Initial check
+    updateOnlineStatus();
+}
 
 // ============================================================
-// AUTO-INITIALIZE ON DOM READY
+// CACHE MANAGEMENT API
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
-});
+async function clearAppCache() {
+    if (!('serviceWorker' in navigator)) return false;
+    
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Send message to service worker
+        const response = await new Promise((resolve, reject) => {
+            const messageChannel = new MessageChannel();
+            messageChannel.port1.onmessage = (event) => {
+                resolve(event.data);
+            };
+            
+            registration.active.postMessage(
+                { type: 'CLEAR_CACHE' },
+                [messageChannel.port2]
+            );
+            
+            setTimeout(() => reject(new Error('Timeout')), 5000);
+        });
+        
+        return response.status;
+    } catch (error) {
+        console.error('[PWA] Clear cache failed:', error);
+        return false;
+    }
+}
 
-// Make App globally available
-window.App = App;
+async function getCacheStatus() {
+    if (!('serviceWorker' in navigator)) return null;
+    
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        return await new Promise((resolve, reject) => {
+            const messageChannel = new MessageChannel();
+            messageChannel.port1.onmessage = (event) => {
+                resolve(event.data);
+            };
+            
+            registration.active.postMessage(
+                { type: 'GET_CACHE_STATUS' },
+                [messageChannel.port2]
+            );
+            
+            setTimeout(() => reject(new Error('Timeout')), 5000);
+        });
+    } catch (error) {
+        console.error('[PWA] Get cache status failed:', error);
+        return null;
+    }
+}
+
+// ============================================================
+// UPDATE init() FUNCTION
+// ============================================================
+// Replace the existing init() function with this updated version:
+
+async function initUpdated() {
+    if (isInitialized) return;
+
+    console.log('🚀 [App] Initializing...');
+
+    try {
+        // 1. Initialize Music module
+        Music.init();
+
+        // 2. Load all data from API
+        await loadData();
+
+        // 3. Render all components
+        await Component.renderAll(appData);
+
+        // 4. Initialize animations
+        Animation.initCoverAnimation();
+
+        // 5. Initialize form handlers
+        Form.initRSVP();
+        Form.initUcapan();
+
+        // 6. Bind global events
+        bindGlobalEvents();
+
+        // 7. Hide loading screen
+        Animation.hideLoadingScreen();
+
+        // 8. Register service worker (PWA)
+        await registerServiceWorker();
+
+        // 9. Setup PWA features
+        setupPWAInstall();
+        checkForUpdates();
+        setupOnlineOfflineDetection();
+
+        isInitialized = true;
+        console.log('✅ [App] Initialization complete');
+
+    } catch (error) {
+        console.error('❌ [App] Initialization failed:', error);
+        handleInitError(error);
+    }
+}
