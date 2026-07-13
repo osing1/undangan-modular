@@ -1,196 +1,213 @@
 /**
  * ============================================================
- * CAROUSEL.JS - 3D GALLERY & LOVE STORY CAROUSEL
+ * FORM.JS - FORM HANDLERS (RSVP, UCAPAN, GIFT)
  * ============================================================
  * 
  * Fungsi:
- * - 3D Gallery carousel (perspective, translate3d)
- * - Love Story horizontal slider
- * - Navigation buttons
- * - Touch/swipe support
+ * - RSVP form submission
+ * - Ucapan form submission
+ * - Gift confirmation
+ * - Form validation
+ * - Feedback handling
  * 
  * Author: Senior Full Stack Developer
  * Version: 1.0.0
  * ============================================================
  */
 
-const Carousel = (() => {
+const Form = (() => {
     // ============================================================
-    // GALLERY 3D CAROUSEL
+    // RSVP FORM
     // ============================================================
-    let galleryState = {
-        items: [],
-        currentIndex: 0,
-        totalItems: 0,
-        radius: 180,
-        angleStep: 0
-    };
+    function initRSVP() {
+        const attendingBtn = document.getElementById('rsvpAttending');
+        const notAttendingBtn = document.getElementById('rsvpNotAttending');
 
-    function initGallery(items) {
-        if (!items || items.length === 0) return;
+        if (attendingBtn) {
+            attendingBtn.addEventListener('click', () => submitRSVP('Hadir'));
+        }
 
-        galleryState.items = items;
-        galleryState.totalItems = items.length;
-        galleryState.angleStep = (2 * Math.PI) / items.length;
-        galleryState.currentIndex = 0;
+        if (notAttendingBtn) {
+            notAttendingBtn.addEventListener('click', () => submitRSVP('Tidak Hadir'));
+        }
 
-        updateGalleryPositions();
-        bindGalleryEvents();
-
-        console.log('✅ [Carousel] Gallery initialized with', items.length, 'items');
+        console.log('✅ [Form] RSVP initialized');
     }
 
-    function updateGalleryPositions() {
-        const container = document.getElementById('galleryCarousel');
-        if (!container) return;
-
-        const items = container.querySelectorAll('.carousel-item');
-        const total = galleryState.totalItems;
-        const current = galleryState.currentIndex;
-
-        items.forEach((item, index) => {
-            // Calculate relative position
-            let relativePos = index - current;
+    async function submitRSVP(attendance) {
+        try {
+            const guestName = document.getElementById('guestName')?.textContent || 'Tamu';
             
-            // Wrap around
-            if (relativePos > total / 2) relativePos -= total;
-            if (relativePos < -total / 2) relativePos += total;
+            const data = {
+                weddingId: 1,
+                guestName: guestName,
+                attendance: attendance,
+                totalGuest: attendance === 'Hadir' ? 1 : 0,
+                note: ''
+            };
 
-            // Calculate 3D position
-            const angle = relativePos * galleryState.angleStep;
-            const x = Math.sin(angle) * galleryState.radius;
-            const z = Math.cos(angle) * galleryState.radius;
-            
-            // Scale based on depth
-            const scale = (z + galleryState.radius) / (2 * galleryState.radius);
-            const finalScale = 0.75 + (scale * 0.55); // Range: 0.75 to 1.3
-            
-            // Opacity based on depth
-            const opacity = 0.7 + (scale * 0.3); // Range: 0.7 to 1.0
-            
-            // Z-index based on depth
-            const zIndex = Math.round(scale * 100);
+            App.showToast('Mengirim konfirmasi...', 'info');
 
-            item.style.transform = `translate(-50%, -50%) translate3d(${x}px, 0, ${z}px) scale(${finalScale})`;
-            item.style.opacity = opacity;
-            item.style.zIndex = zIndex;
-        });
-    }
+            const response = await API.form.submitRSVP(data);
 
-    function galleryNext() {
-        galleryState.currentIndex = (galleryState.currentIndex + 1) % galleryState.totalItems;
-        updateGalleryPositions();
-    }
-
-    function galleryPrev() {
-        galleryState.currentIndex = (galleryState.currentIndex - 1 + galleryState.totalItems) % galleryState.totalItems;
-        updateGalleryPositions();
-    }
-
-    function bindGalleryEvents() {
-        const prevBtn = document.getElementById('galleryPrev');
-        const nextBtn = document.getElementById('galleryNext');
-
-        if (prevBtn) prevBtn.addEventListener('click', galleryPrev);
-        if (nextBtn) nextBtn.addEventListener('click', galleryNext);
-
-        // Touch/swipe support
-        const container = document.getElementById('galleryCarousel');
-        if (container) {
-            let touchStartX = 0;
-            let touchEndX = 0;
-
-            container.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-            }, { passive: true });
-
-            container.addEventListener('touchend', (e) => {
-                touchEndX = e.changedTouches[0].screenX;
-                handleSwipe();
-            }, { passive: true });
-
-            function handleSwipe() {
-                const diff = touchStartX - touchEndX;
-                if (Math.abs(diff) > 50) {
-                    if (diff > 0) {
-                        galleryNext();
-                    } else {
-                        galleryPrev();
-                    }
+            if (response.status) {
+                App.showToast('Terima kasih! Konfirmasi Anda telah diterima.', 'success');
+                
+                const attendingBtn = document.getElementById('rsvpAttending');
+                const notAttendingBtn = document.getElementById('rsvpNotAttending');
+                
+                if (attendance === 'Hadir' && attendingBtn) {
+                    attendingBtn.textContent = '✓ Konfirmasi Diterima';
+                    attendingBtn.disabled = true;
+                    attendingBtn.style.opacity = '0.6';
+                } else if (attendance === 'Tidak Hadir' && notAttendingBtn) {
+                    notAttendingBtn.textContent = '✓ Konfirmasi Diterima';
+                    notAttendingBtn.disabled = true;
+                    notAttendingBtn.style.opacity = '0.6';
                 }
+            } else {
+                throw new Error(response.message || 'Gagal mengirim');
             }
+        } catch (error) {
+            console.error('❌ [Form] RSVP error:', error);
+            App.showToast('Gagal mengirim konfirmasi. Silakan coba lagi.', 'error');
         }
     }
 
     // ============================================================
-    // LOVE STORY CAROUSEL
+    // UCAPAN FORM
     // ============================================================
-    let storyState = {
-        items: [],
-        currentIndex: 0,
-        totalItems: 0
-    };
+    function initUcapan() {
+        const form = document.getElementById('ucapanForm');
+        const loadMoreBtn = document.getElementById('loadMoreUcapan');
 
-    function initLoveStory(items) {
-        if (!items || items.length === 0) return;
+        if (form) {
+            form.addEventListener('submit', submitUcapan);
+        }
 
-        storyState.items = items;
-        storyState.totalItems = items.length;
-        storyState.currentIndex = 0;
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', loadMoreUcapan);
+        }
 
-        updateStoryPositions();
-        bindStoryEvents();
-
-        console.log('✅ [Carousel] Love Story initialized with', items.length, 'items');
+        console.log('✅ [Form] Ucapan initialized');
     }
 
-    function updateStoryPositions() {
-        const container = document.getElementById('loveStoryCarousel');
-        if (!container) return;
+    async function submitUcapan(event) {
+        event.preventDefault();
 
-        const slides = container.querySelectorAll('.story-slide');
-        const current = storyState.currentIndex;
+        const input = document.getElementById('ucapanInput');
+        if (!input) return;
 
-        slides.forEach((slide, index) => {
-            if (index === current) {
-                slide.style.display = '';
-                slide.style.opacity = '1';
+        const message = input.value.trim();
+        if (!message) {
+            App.showToast('Silakan tulis ucapan Anda', 'warning');
+            return;
+        }
+
+        if (message.length > 500) {
+            App.showToast('Ucapan terlalu panjang (maks 500 karakter)', 'warning');
+            return;
+        }
+
+        try {
+            App.showToast('Mengirim ucapan...', 'info');
+
+            const data = {
+                weddingId: 1,
+                name: '',
+                message: message,
+                isAnonymous: true
+            };
+
+            const response = await API.form.submitUcapan(data);
+
+            if (response.status) {
+                App.showToast('Terima kasih atas ucapan Anda!', 'success');
+                input.value = '';
+                await reloadUcapan();
             } else {
-                slide.style.display = 'none';
-                slide.style.opacity = '0';
+                throw new Error(response.message || 'Gagal mengirim');
             }
-        });
+        } catch (error) {
+            console.error('❌ [Form] Ucapan error:', error);
+            App.showToast('Gagal mengirim ucapan. Silakan coba lagi.', 'error');
+        }
     }
 
-    function storyNext() {
-        storyState.currentIndex = (storyState.currentIndex + 1) % storyState.totalItems;
-        updateStoryPositions();
+    async function reloadUcapan() {
+        try {
+            const response = await API.data.getUcapan(1, 10, 0);
+            if (response.status) {
+                Component.renderUcapan({ greetings: response.data });
+            }
+        } catch (error) {
+            console.error('❌ [Form] Reload ucapan error:', error);
+        }
     }
 
-    function storyPrev() {
-        storyState.currentIndex = (storyState.currentIndex - 1 + storyState.totalItems) % storyState.totalItems;
-        updateStoryPositions();
+    let ucapanOffset = 10;
+    async function loadMoreUcapan() {
+        try {
+            App.showToast('Memuat ucapan...', 'info');
+
+            const response = await API.data.getUcapan(1, 10, ucapanOffset);
+            
+            if (response.status && response.data.length > 0) {
+                Component.renderUcapan({ greetings: response.data }, true);
+                ucapanOffset += 10;
+
+                if (!response.pagination?.hasMore) {
+                    const loadMoreBtn = document.getElementById('loadMoreUcapan');
+                    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                }
+            } else {
+                App.showToast('Tidak ada ucapan lagi', 'info');
+                const loadMoreBtn = document.getElementById('loadMoreUcapan');
+                if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('❌ [Form] Load more error:', error);
+            App.showToast('Gagal memuat ucapan', 'error');
+        }
     }
 
-    function bindStoryEvents() {
-        const prevBtn = document.getElementById('storyPrev');
-        const nextBtn = document.getElementById('storyNext');
+    // ============================================================
+    // GIFT CONFIRMATION
+    // ============================================================
+    async function confirmGift(type, data) {
+        try {
+            App.showToast('Mengirim konfirmasi...', 'info');
 
-        if (prevBtn) prevBtn.addEventListener('click', storyPrev);
-        if (nextBtn) nextBtn.addEventListener('click', storyNext);
+            const payload = {
+                weddingId: 1,
+                type: type,
+                ...data
+            };
+
+            const response = await API.form.confirmGift(payload);
+
+            if (response.status) {
+                App.showToast('Konfirmasi berhasil dikirim. Terima kasih!', 'success');
+            } else {
+                throw new Error(response.message || 'Gagal mengirim');
+            }
+        } catch (error) {
+            console.error('❌ [Form] Gift confirmation error:', error);
+            App.showToast('Gagal mengirim konfirmasi', 'error');
+        }
     }
 
     // ============================================================
     // PUBLIC API
     // ============================================================
     return {
-        initGallery,
-        galleryNext,
-        galleryPrev,
-        initLoveStory,
-        storyNext,
-        storyPrev
+        initRSVP,
+        initUcapan,
+        submitRSVP,
+        submitUcapan,
+        loadMoreUcapan,
+        confirmGift
     };
 })();
 
-window.Carousel = Carousel;
+window.Form = Form;
